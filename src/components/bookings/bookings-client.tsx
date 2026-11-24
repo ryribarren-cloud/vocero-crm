@@ -28,7 +28,7 @@ import { addDaysISO, dayIsoInTz } from "@/lib/time/slots";
 import type { WeeklyHours } from "@/server/agenda/settings";
 import { cn } from "@/lib/utils";
 import { AgendaList } from "./agenda-list";
-import { BlockDialog } from "./block-dialog";
+import { CreateBookingDialog } from "./create-booking-dialog";
 import { BookingDrawer, type ActResult } from "./booking-drawer";
 import type { Booking } from "./booking-look";
 import { CalendarToolbar } from "./calendar-toolbar";
@@ -100,7 +100,7 @@ export function BookingsClient({
   const [showTests, setShowTests] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<Booking | null>(null);
-  const [blockDraft, setBlockDraft] = useState<{ day: string; time: string } | null>(null);
+  const [bookingDraft, setBookingDraft] = useState<{ day: string; time: string; kind: "block" | "session" } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [now, setNow] = useState<number | null>(null);
   const seq = useRef(0);
@@ -273,11 +273,11 @@ export function BookingsClient({
     setView("dia");
   }
 
-  /** Bloquear: en el hueco tocado o, desde la barra, en la próxima media hora. */
-  function openBlock(day?: string, time?: string) {
+  /** Abrir el formulario: en el hueco tocado o, desde la barra, en la próxima media hora. */
+  function openBooking(kind: "block" | "session", day?: string, time?: string) {
     setSelectedId(null);
     if (day && time) {
-      setBlockDraft({ day, time });
+      setBookingDraft({ kind, day, time });
       return;
     }
     const base =
@@ -286,7 +286,7 @@ export function BookingsClient({
     if (base === today) {
       start = Math.min(23 * 60 + 30, Math.max(start, Math.ceil((nowMinutes + 1) / 30) * 30));
     }
-    setBlockDraft({ day: base, time: hhmm(start) });
+    setBookingDraft({ kind, day: base, time: hhmm(start) });
   }
 
   async function act(b: Booking, body: Record<string, unknown>): Promise<ActResult> {
@@ -331,7 +331,8 @@ export function BookingsClient({
         onJump={setAnchor}
         onView={changeView}
         onListRange={changeListRange}
-        onBlock={() => openBlock()}
+        onBlock={() => openBooking("block")}
+        onCreate={() => openBooking("session")}
       />
 
       {/* En escritorio ancho el panel de la cita EMPUJA el calendario en vez
@@ -390,7 +391,7 @@ export function BookingsClient({
                 selectedId={selectedId}
                 ready={ready}
                 onSelect={select}
-                onEmptySlot={(day, time) => openBlock(day, time)}
+                onEmptySlot={(day, time) => openBooking("block", day, time)}
                 onOpenDay={openDay}
               />
             ) : view === "mes" ? (
@@ -430,14 +431,15 @@ export function BookingsClient({
         )}
       </div>
 
-      {blockDraft && (
-        <BlockDialog
-          initialDay={blockDraft.day}
-          initialTime={blockDraft.time}
+      {bookingDraft && (
+        <CreateBookingDialog
+          kind={bookingDraft.kind}
+          initialDay={bookingDraft.day}
+          initialTime={bookingDraft.time}
           timezone={timezone}
-          onCancel={() => setBlockDraft(null)}
+          onCancel={() => setBookingDraft(null)}
           onCreated={(day) => {
-            setBlockDraft(null);
+            setBookingDraft(null);
             reveal(day);
             void reload();
           }}
