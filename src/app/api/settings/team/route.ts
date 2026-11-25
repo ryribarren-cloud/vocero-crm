@@ -14,6 +14,7 @@ export const GET = withAuth(async (session) => {
     .select({
       id: schema.member.id,
       role: schema.member.role,
+      takesAppointments: schema.member.takesAppointments,
       createdAt: schema.member.createdAt,
       name: schema.user.name,
       email: schema.user.email,
@@ -22,9 +23,11 @@ export const GET = withAuth(async (session) => {
     .innerJoin(schema.user, eq(schema.member.userId, schema.user.id))
     .where(scoped(schema.member.organizationId, session.organizationId));
   return Response.json({
+    canManage: session.role === "owner",
     members: members.map((m) => ({
       id: m.id,
       role: m.role,
+      takesAppointments: m.takesAppointments,
       name: m.name,
       email: m.email,
       createdAt: m.createdAt.toISOString(),
@@ -80,4 +83,23 @@ export const POST = withAuth(async (session, req: Request) => {
     .onConflictDoNothing();
 
   return Response.json({ ok: true }, { status: 201 });
+});
+
+const assignmentSchema = z.object({
+  id: z.string().min(1),
+  takesAppointments: z.boolean(),
+});
+
+export const PATCH = withAuth(async (session, req: Request) => {
+  if (session.role !== "owner") {
+    return apiError(403, "forbidden", "Solo el propietario puede configurar quién atiende citas");
+  }
+  const body = await parseBody(req, assignmentSchema);
+  if (!body.ok) return body.response;
+  const [member] = await getDb().update(schema.member)
+    .set({ takesAppointments: body.data.takesAppointments })
+    .where(scoped(schema.member.organizationId, session.organizationId, eq(schema.member.id, body.data.id)))
+    .returning({ id: schema.member.id });
+  if (!member) return apiError(404, "not_found", "Miembro no encontrado");
+  return Response.json({ ok: true });
 });

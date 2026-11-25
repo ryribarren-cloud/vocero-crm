@@ -93,6 +93,7 @@ export const member = pgTable("member", {
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
   role: text("role").notNull().default("member"),
+  takesAppointments: boolean("takes_appointments").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -844,6 +845,7 @@ export const booking = pgTable(
       onDelete: "set null",
     }),
     leadId: text("lead_id").references(() => lead.id, { onDelete: "set null" }),
+    assignedMemberId: text("assigned_member_id").references(() => member.id, { onDelete: "set null" }),
     /** Instante UTC. El horario semanal es de pared; esto ya está resuelto. */
     scheduledAt: timestamp("scheduled_at").notNull(),
     /** Capturada al crear: cambiar la configuración no reescribe el pasado. */

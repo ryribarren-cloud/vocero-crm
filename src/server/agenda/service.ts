@@ -88,6 +88,7 @@ export async function createSessionBooking(input: {
   conversationId?: string | null;
   /** Camino manual del operador. */
   contactId?: string | null;
+  assignedMemberId?: string | null;
   notes?: string | null;
   /**
    * true ⇒ exige que el instante figure entre los ofrecidos a la conversación
@@ -102,6 +103,15 @@ export async function createSessionBooking(input: {
 
   if (Number.isNaN(Date.parse(input.startUtc))) {
     throw new BookingError("invalid", "Instante inválido");
+  }
+
+  if (input.assignedMemberId) {
+    const [assignee] = await db.select({ id: schema.member.id })
+      .from(schema.member)
+      .where(scoped(schema.member.organizationId, input.organizationId,
+        eq(schema.member.id, input.assignedMemberId), eq(schema.member.takesAppointments, true)))
+      .limit(1);
+    if (!assignee) throw new BookingError("invalid", "El miembro seleccionado no atiende citas");
   }
 
   // Contexto de la conversación: contacto y si es del Laboratorio.
@@ -189,6 +199,7 @@ export async function createSessionBooking(input: {
         kind: "session",
         source: input.source === "ai" ? "ai" : "manual",
         contactId,
+        assignedMemberId: input.assignedMemberId ?? null,
         conversationId: input.conversationId ?? null,
         leadId: leadRows[0]?.id ?? null,
         scheduledAt: new Date(slot.startUtc),

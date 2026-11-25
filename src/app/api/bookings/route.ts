@@ -49,6 +49,7 @@ const postSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("session"),
     contactId: z.string().min(1),
+    assignedMemberId: z.string().min(1).nullish(),
     conversationId: z.string().min(1).nullish(),
     startUtc: z.string().min(1),
     notes: z.string().nullish(),
@@ -90,6 +91,7 @@ export const POST = withAuth(async (session, req: Request) => {
     const result = await createSessionBooking({
       organizationId: session.organizationId,
       contactId: body.data.contactId,
+      assignedMemberId: body.data.assignedMemberId,
       conversationId: body.data.conversationId ?? null,
       startUtc: body.data.startUtc,
       notes: body.data.notes ?? null,

@@ -75,12 +75,14 @@ const keyOf = (r: DateRange) => `${r.from}|${r.to}`;
 
 export function BookingsClient({
   initialView,
+  assignees,
   initialDate,
   initialListTo,
   timezone: initialTimezone,
   weeklyHours: initialWeeklyHours,
 }: {
   initialView: CalendarView | null;
+  assignees: { id: string; name: string }[];
   initialDate: string;
   initialListTo: string | null;
   timezone: string;
@@ -98,6 +100,7 @@ export function BookingsClient({
   const [loadError, setLoadError] = useState(false);
   const [showCancelled, setShowCancelled] = useState(false);
   const [showTests, setShowTests] = useState(false);
+  const [assigneeFilter, setAssigneeFilter] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<Booking | null>(null);
   const [bookingDraft, setBookingDraft] = useState<{ day: string; time: string; kind: "block" | "session" } | null>(null);
@@ -190,7 +193,14 @@ export function BookingsClient({
   const today = now === null ? null : dayIsoInTz(new Date(now), timezone);
   const nowMinutes = now === null ? 0 : wallClock(new Date(now), timezone).minutes;
 
-  const all = useMemo(() => loaded?.bookings ?? [], [loaded]);
+  const all = useMemo(() => (loaded?.bookings ?? []).filter((booking) =>
+    !assigneeFilter || booking.kind === "block" ||
+    (assigneeFilter === "unassigned" ? !booking.assignee : booking.assignee?.id === assigneeFilter)
+  ), [loaded, assigneeFilter]);
+  const filterOptions = new Map(assignees.map(({ id, name }) => [id, name]));
+  for (const booking of loaded?.bookings ?? []) {
+    if (booking.assignee) filterOptions.set(booking.assignee.id, booking.assignee.name);
+  }
   const visible = useMemo(
     () => calendarVisible(all, { showCancelled, showTests }),
     [all, showCancelled, showTests]
@@ -339,6 +349,17 @@ export function BookingsClient({
           de taparlo: la semana entera sigue a la vista con la cita marcada. */}
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
+          <label className="flex items-center gap-2 border-b px-4 py-2 text-sm">
+            Atiende
+            <select value={assigneeFilter} onChange={(event) => {
+              setAssigneeFilter(event.target.value);
+              setSelectedId(null);
+            }} className="rounded-md border border-input bg-background px-2 py-1">
+              <option value="">Todos</option>
+              <option value="unassigned">Sin asignar</option>
+              {[...filterOptions].map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+            </select>
+          </label>
           <StatusBar
             counts={counts}
             timezone={timezone}
@@ -434,11 +455,13 @@ export function BookingsClient({
       {bookingDraft && (
         <CreateBookingDialog
           kind={bookingDraft.kind}
+          assignees={assignees}
           initialDay={bookingDraft.day}
           initialTime={bookingDraft.time}
           timezone={timezone}
           onCancel={() => setBookingDraft(null)}
           onCreated={(day) => {
+            if (bookingDraft.kind === "session") setAssigneeFilter("");
             setBookingDraft(null);
             reveal(day);
             void reload();

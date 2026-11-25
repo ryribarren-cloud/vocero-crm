@@ -18,6 +18,7 @@ function durationLabel(min: number): string {
 
 export function CreateBookingDialog({
   kind,
+  assignees,
   initialDay,
   initialTime,
   timezone,
@@ -25,6 +26,7 @@ export function CreateBookingDialog({
   onCreated,
 }: {
   kind: "block" | "session";
+  assignees: { id: string; name: string }[];
   initialDay: string;
   initialTime: string;
   timezone: string;
@@ -32,6 +34,7 @@ export function CreateBookingDialog({
   onCreated: (day: string) => void;
 }) {
   const isSession = kind === "session";
+  const [assignee, setAssignee] = useState("");
   const [query, setQuery] = useState("");
   const [contactId, setContactId] = useState("");
   const [results, setResults] = useState<{ query: string; contacts: ContactDto[] | null } | null>(null);
@@ -88,7 +91,7 @@ export function CreateBookingDialog({
       body: JSON.stringify({
         startUtc,
         notes: notes.trim() || null,
-        ...(isSession ? { kind, contactId } : { kind, durationMinutes: minutes }),
+        ...(isSession ? { kind, contactId, assignedMemberId: assignee || null } : { kind, durationMinutes: minutes }),
       }),
     }).catch(() => null);
     setBusy(false);
@@ -155,6 +158,18 @@ export function CreateBookingDialog({
                   {contact.name}{contact.phone ? ` · ${contact.phone}` : ""}
                 </option>
               ))}
+            </select>
+          </div>
+        )}
+
+        {isSession && (
+          <div className="space-y-1.5">
+            <Label htmlFor="cita-atiende">Atiende</Label>
+            <select id="cita-atiende" value={assignee}
+              onChange={(event) => setAssignee(event.target.value)}
+              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
+              <option value="">Sin asignar</option>
+              {assignees.map(({ id, name }) => <option key={id} value={id}>{name}</option>)}
             </select>
           </div>
         )}

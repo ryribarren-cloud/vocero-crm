@@ -1,4 +1,4 @@
-import { asc, desc, eq, gte, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lt } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
 import type { DateRange } from "@/lib/time/calendar";
@@ -18,6 +18,7 @@ export type BookingListItem = {
   time: string;
   weekday: string;
   contact: { id: string; name: string } | null;
+  assignee?: { id: string; name: string } | null;
   conversationId: string | null;
   /** Con qué conector nació la entrega de esta cita. */
   connector: string | null;
@@ -50,6 +51,7 @@ type Row = {
   booking: typeof schema.booking.$inferSelect;
   contactId: string | null;
   contactName: string | null;
+  assigneeName: string | null;
 };
 
 function baseQuery() {
@@ -58,9 +60,15 @@ function baseQuery() {
       booking: schema.booking,
       contactId: schema.contact.id,
       contactName: schema.contact.name,
+      assigneeName: schema.user.name,
     })
     .from(schema.booking)
-    .leftJoin(schema.contact, eq(schema.booking.contactId, schema.contact.id));
+    .leftJoin(schema.contact, eq(schema.booking.contactId, schema.contact.id))
+    .leftJoin(schema.member, and(
+      eq(schema.booking.assignedMemberId, schema.member.id),
+      eq(schema.booking.organizationId, schema.member.organizationId)
+    ))
+    .leftJoin(schema.user, eq(schema.member.userId, schema.user.id));
 }
 
 /** Las últimas 200 citas: el listado de siempre, para quien no pide rango. */
@@ -132,6 +140,8 @@ function toListItem(r: Row, timezone: string): BookingListItem {
     time: parts.time,
     weekday: parts.weekday,
     contact: r.contactId ? { id: r.contactId, name: r.contactName ?? "" } : null,
+    assignee: r.booking.assignedMemberId && r.assigneeName
+      ? { id: r.booking.assignedMemberId, name: r.assigneeName } : null,
     conversationId: r.booking.conversationId,
     connector: r.booking.connector,
     meetingLink: r.booking.meetingLink,
