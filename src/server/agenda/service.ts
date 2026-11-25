@@ -1,4 +1,6 @@
 import { and, asc, eq, gte, inArray } from "drizzle-orm";
+import { confirmsStaffBooking } from "@/server/agenda/staff-confirmation";
+import { desc } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { scoped } from "@/lib/db/tenant";
@@ -105,10 +107,11 @@ export async function createSessionBooking(input: {
     throw new BookingError("invalid", "Instante inválido");
   }
 
-  if (input.assignedStaffId) {
+  let assignedStaffId = input.assignedStaffId;
+  if (assignedStaffId) {
     const [assignee] = await db.select({ id: schema.staff.id })
       .from(schema.staff)
-      .where(scoped(schema.staff.organizationId, input.organizationId, eq(schema.staff.id, input.assignedStaffId)))
+      .where(scoped(schema.staff.organizationId, input.organizationId, eq(schema.staff.id, assignedStaffId), eq(schema.staff.takesAppointments, true)))
       .limit(1);
     if (!assignee) throw new BookingError("invalid", "La persona seleccionada no pertenece a la plantilla");
   }
@@ -152,7 +155,19 @@ export async function createSessionBooking(input: {
       );
     }
     const offers = await getOffers(input.organizationId, input.conversationId);
-    if (!findOffered(offers, input.startUtc)) {
+    const offered = findOffered(offers, input.startUtc);
+    if (offered?.assignedStaffId && offered.offeredAt) {
+      const [last] = await db.select({ text: schema.message.text, createdAt: schema.message.createdAt }).from(schema.message)
+        .where(scoped(schema.message.organizationId, input.organizationId, eq(schema.message.conversationId, input.conversationId), eq(schema.message.direction, "in")))
+        .orderBy(desc(schema.message.createdAt)).limit(1);
+      const [person] = await db.select({ name: schema.staff.name }).from(schema.staff)
+        .where(scoped(schema.staff.organizationId, input.organizationId, eq(schema.staff.id, offered.assignedStaffId)));
+      if (!person || !last || last.createdAt <= offered.offeredAt || !confirmsStaffBooking(last.text ?? "", person.name)) {
+        throw new BookingError("invalid", "Pide confirmación del horario y del responsable antes de reservar");
+      }
+    }
+    if (offered) assignedStaffId = offered.assignedStaffId ?? null;
+    if (!offered || (input.assignedStaffId && assignedStaffId !== input.assignedStaffId)) {
       throw new BookingError(
         "slot_not_offered",
         "Ese horario no se ofreció en esta conversación",
@@ -163,6 +178,7 @@ export async function createSessionBooking(input: {
 
   // REGLA 2 (primera mitad): el hueco debe seguir libre AHORA.
   const slot = await findSlot(input.organizationId, input.startUtc, {
+    assignedStaffId,
     now: input.now,
     settings,
   });
@@ -170,7 +186,7 @@ export async function createSessionBooking(input: {
     throw new BookingError(
       "slot_taken",
       "Ese horario ya no está disponible",
-      await refreshOffer(input.organizationId, input.conversationId, {
+      await refreshOffer(input.organizationId, input.conversationId, { assignedStaffId,
         now: input.now,
       })
     );
@@ -198,7 +214,7 @@ export async function createSessionBooking(input: {
         kind: "session",
         source: input.source === "ai" ? "ai" : "manual",
         contactId,
-        assignedStaffId: input.assignedStaffId ?? null,
+        assignedStaffId: assignedStaffId ?? null,
         conversationId: input.conversationId ?? null,
         leadId: leadRows[0]?.id ?? null,
         scheduledAt: new Date(slot.startUtc),
@@ -219,7 +235,7 @@ export async function createSessionBooking(input: {
       throw new BookingError(
         "slot_taken",
         "Ese horario acaba de ocuparse",
-        await refreshOffer(input.organizationId, input.conversationId, {
+        await refreshOffer(input.organizationId, input.conversationId, { assignedStaffId,
           now: input.now,
         })
       );
@@ -263,6 +279,7 @@ export async function createBlock(input: {
   organizationId: string;
   startUtc: string;
   durationMinutes: number;
+  assignedStaffId?: string | null;
   notes?: string | null;
 }): Promise<BookingRow> {
   if (Number.isNaN(Date.parse(input.startUtc))) {
@@ -276,6 +293,7 @@ export async function createBlock(input: {
         id: newId("booking"),
         organizationId: input.organizationId,
         kind: "block",
+        assignedStaffId: input.assignedStaffId,
         source: "manual",
         scheduledAt: new Date(input.startUtc),
         durationMinutes: input.durationMinutes,
@@ -296,6 +314,31 @@ export async function createBlock(input: {
   }
 }
 
+export async function assignBooking(organizationId: string, bookingId: string, staffId: string) {
+  const db = getDb();
+  const booking = await getOwnBooking(organizationId, bookingId);
+  if (booking.kind !== "session") throw new BookingError("invalid", "Selecciona una cita");
+  const [person] = await db.select({ id: schema.staff.id }).from(schema.staff)
+    .where(scoped(schema.staff.organizationId, organizationId, eq(schema.staff.id, staffId), eq(schema.staff.takesAppointments, true)));
+  if (!person) throw new BookingError("invalid", "Selecciona una ficha que atienda citas");
+  if (booking.status === "agendada" && booking.scheduledAt > new Date()) {
+    const settings = await getSettings(organizationId);
+    const slot = await findSlot(organizationId, booking.scheduledAt.toISOString(), {
+      settings: { ...settings, minNoticeHours: 0, slotMinutes: booking.durationMinutes }, assignedStaffId: staffId, excludeBookingId: bookingId,
+    });
+    if (!slot) throw new BookingError("slot_taken", "La ficha no está disponible");
+  }
+  try {
+    const [updated] = await db.update(schema.booking).set({ assignedStaffId: staffId, updatedAt: new Date() })
+      .where(scoped(schema.booking.organizationId, organizationId, eq(schema.booking.id, bookingId), eq(schema.booking.scheduledAt, booking.scheduledAt))).returning({ id: schema.booking.id });
+    if (!updated) throw new BookingError("invalid", "La cita cambió; actualiza la agenda");
+  } catch (err) {
+    if (isUniqueViolation(err)) throw new BookingError("slot_taken", "La ficha ya tiene una cita en ese intervalo");
+    throw err;
+  }
+  publish(organizationId, { type: "booking.updated", data: { bookingId } });
+}
+
 export async function rescheduleBooking(input: {
   organizationId: string;
   bookingId: string;
@@ -311,6 +354,7 @@ export async function rescheduleBooking(input: {
   const settings = await getSettings(input.organizationId);
   // excludeBookingId: la propia cita no debe bloquearse a sí misma.
   const slot = await findSlot(input.organizationId, input.startUtc, {
+    assignedStaffId: booking.assignedStaffId,
     excludeBookingId: booking.id,
     now: input.now,
     settings,
@@ -418,6 +462,8 @@ export async function rescheduleForConversation(input: {
     throw new BookingError("not_found", "No hay una cita activa que mover");
   }
 
+  const offeredStaff = findOffered(offers, input.startUtc)?.assignedStaffId;
+  if (offeredStaff && target.assignedStaffId !== offeredStaff) throw new BookingError("invalid", "Consulta la disponibilidad del responsable de esta cita");
   const result = await rescheduleBooking({
     organizationId: input.organizationId,
     bookingId: target.id,
@@ -632,11 +678,11 @@ async function withConnector(
 async function refreshOffer(
   organizationId: string,
   conversationId: string | null | undefined,
-  opts: { now?: Date }
+  opts: { assignedStaffId?: string | null; now?: Date }
 ): Promise<OfferedSlot[]> {
   let fresh: AvailableSlot[] = [];
   try {
-    fresh = (await computeAvailability(organizationId, { now: opts.now })).slice(
+    fresh = (await computeAvailability(organizationId, opts)).slice(
       0,
       FRESH_ALTERNATIVES
     );
@@ -645,6 +691,7 @@ async function refreshOffer(
     return [];
   }
   const offers: OfferedSlot[] = fresh.map((s) => ({
+    assignedStaffId: opts.assignedStaffId,
     startUtc: s.startUtc,
     label: s.label,
   }));

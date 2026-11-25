@@ -20,7 +20,7 @@ export class UnauthorizedError extends Error {
  * Sesión + organización activa para route handlers y server components.
  * Lanza UnauthorizedError si no hay sesión u organización.
  */
-export async function requireSession({ allowBarber = false } = {}): Promise<SessionContext> {
+export async function requireSession({ allowBarber = false, allowReception = false } = {}): Promise<SessionContext> {
   const auth = getAuth();
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) throw new UnauthorizedError();
@@ -30,6 +30,7 @@ export async function requireSession({ allowBarber = false } = {}): Promise<Sess
   if (!membership) {
     throw new UnauthorizedError("Sesión sin organización activa");
   }
+  if (membership.role === "reception" && !allowReception) throw new UnauthorizedError("Acceso de recepción restringido");
   if (membership.role === "barber" && !allowBarber) {
     throw new UnauthorizedError("La cuenta de barbero solo puede abrir Mis citas");
   }
@@ -42,7 +43,7 @@ export async function requireSession({ allowBarber = false } = {}): Promise<Sess
 }
 
 /** Igual que requireSession pero devuelve null en vez de lanzar. */
-export async function getSessionOrNull(options?: { allowBarber?: boolean }): Promise<SessionContext | null> {
+export async function getSessionOrNull(options?: { allowBarber?: boolean; allowReception?: boolean }): Promise<SessionContext | null> {
   try {
     return await requireSession(options);
   } catch {

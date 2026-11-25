@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { apiError } from "@/lib/api";
 import { scoped } from "@/lib/db/tenant";
@@ -103,9 +103,28 @@ export async function GET(req: Request) {
   // Un día fuera de lo agendable ni se calcula: no hay nada que buscar.
   const dentro =
     !date || (date >= hoy && date <= addDaysISO(hoy, settings.maxDaysAhead));
+  const roster = await getDb().select({ id: schema.staff.id, name: schema.staff.name }).from(schema.staff)
+    .where(scoped(schema.staff.organizationId, organizationId, eq(schema.staff.takesAppointments, true)));
+  const staffId = url.searchParams.get("staffId");
+  const requested = url.searchParams.get("staffName")?.trim().toLocaleLowerCase("es");
+  const [inbound] = await getDb().select({ text: schema.message.text }).from(schema.message)
+    .where(scoped(schema.message.organizationId, organizationId, eq(schema.message.conversationId, conversationId), eq(schema.message.direction, "in")))
+    .orderBy(desc(schema.message.createdAt)).limit(1);
+  const words = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).join(" ");
+  const mentioned = " " + words(inbound?.text ?? "") + " ";
+  const matches = roster.filter(s => staffId ? s.id === staffId : requested ? s.name.toLocaleLowerCase("es") === requested : mentioned.includes(" " + words(s.name) + " "));
+  if (roster.length && matches.length !== 1) {
+    const options = await Promise.all(roster.map(async person => ({
+      ...person, slots: dentro ? (await computeAvailability(organizationId, { assignedStaffId: person.id, settings, now, ...(date ? { fromISO: date, toISO: date } : {}) })).slice(0, 3) : [],
+    })));
+    await replaceOffers(organizationId, conversationId, []);
+    return Response.json({ slots: [], staffOptions: options.filter(o => o.slots.length), requiresStaffSelection: true, instruction: "Pregunta con quién desea reservar y confirma el horario antes de reservar." });
+  }
+  const selected = matches[0];
   const todos = dentro
     ? await computeAvailability(organizationId, {
         settings,
+        assignedStaffId: selected?.id,
         now,
         ...(date ? { fromISO: date, toISO: date } : {}),
       })
@@ -131,7 +150,7 @@ export async function GET(req: Request) {
     await replaceOffers(
       organizationId,
       conversationId,
-      slots.map((s) => ({ startUtc: s.startUtc, label: s.label }))
+      slots.map((s) => ({ startUtc: s.startUtc, label: selected ? s.label + " · " + selected.name : s.label, assignedStaffId: selected?.id }))
     );
   }
 
@@ -140,6 +159,8 @@ export async function GET(req: Request) {
       startUtc: s.startUtc,
       endUtc: s.endUtc,
       label: s.label,
+      assignedStaffId: selected?.id,
+      staffName: selected?.name,
       dayIso: s.dayIso,
       dayLabel: s.dayLabel,
       time: s.time,

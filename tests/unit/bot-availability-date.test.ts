@@ -52,7 +52,8 @@ vi.mock("@/lib/db", async () => {
   const schema = await import("@/lib/db/schema");
   const chain = {
     select: () => chain,
-    from: () => chain,
+    from: (table: unknown) => table === schema.staff ? { where: async () => [] } : chain,
+    orderBy: () => chain,
     where: () => chain,
     limit: async () => h.convRows,
   };

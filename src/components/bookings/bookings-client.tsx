@@ -194,8 +194,8 @@ export function BookingsClient({
   const nowMinutes = now === null ? 0 : wallClock(new Date(now), timezone).minutes;
 
   const all = useMemo(() => (loaded?.bookings ?? []).filter((booking) =>
-    !assigneeFilter || booking.kind === "block" ||
-    (assigneeFilter === "unassigned" ? !booking.assignee : booking.assignee?.id === assigneeFilter)
+    !assigneeFilter || (booking.kind === "block" && !booking.assignee && assigneeFilter !== "unassigned") ||
+    (assigneeFilter === "unassigned" ? booking.kind === "session" && !booking.assignee : booking.assignee?.id === assigneeFilter)
   ), [loaded, assigneeFilter]);
   const filterOptions = new Map(assignees.map(({ id, name }) => [id, name]));
   for (const booking of loaded?.bookings ?? []) {
@@ -440,7 +440,7 @@ export function BookingsClient({
         </div>
 
         {selected && (
-          <BookingDrawer
+          <BookingDrawer assignees={assignees}
             booking={selected}
             timezone={timezone}
             today={today}

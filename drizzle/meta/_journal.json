@@ -204,6 +204,20 @@
       "when": 1795568537977,
       "tag": "0028_staff_roster",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1795626618824,
+      "tag": "0029_barber_operations",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1795626742713,
+      "tag": "0030_staff_offers",
+      "breakpoints": true
     }
   ]
 }

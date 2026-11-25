@@ -78,9 +78,9 @@ export async function listBookings(
 ): Promise<BookingListItem[]> {
   const resolved = settings ?? (await getSettings(organizationId));
   const rows = await baseQuery()
-    .where(scoped(schema.booking.organizationId, organizationId, assignedMemberId
-      ? and(eq(schema.booking.kind, "session"), eq(schema.staff.memberId, assignedMemberId))
-      : undefined))
+    .where(assignedMemberId
+      ? scoped(schema.booking.organizationId, organizationId, eq(schema.booking.kind, "session"), eq(schema.staff.memberId, assignedMemberId))
+      : scoped(schema.booking.organizationId, organizationId))
     .orderBy(desc(schema.booking.scheduledAt))
     .limit(LIST_LIMIT);
   return rows.map((r) => toListItem(r, resolved.timezone));

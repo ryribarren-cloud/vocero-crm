@@ -2,6 +2,7 @@ import { z } from "zod";
 import { parseBody, withAuth } from "@/lib/api";
 import { agendaDisabledResponse, agendaEnabled } from "@/server/agenda/flag";
 import {
+  assignBooking,
   cancelBooking,
   markBookingStatus,
   rescheduleBooking,
@@ -15,6 +16,7 @@ type Params = { params: Promise<{ id: string }> };
 
 const patchSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("reschedule"), startUtc: z.string().min(1) }),
+  z.object({ action: z.literal("assign"), staffId: z.string().min(1) }),
   z.object({ action: z.literal("cancel") }),
   z.object({
     action: z.literal("status"),
@@ -43,6 +45,9 @@ export const PATCH = withAuth(async (session, req: Request, ctx: Params) => {
         });
         return Response.json({ ok: true, label: result.label });
       }
+      case "assign":
+        await assignBooking(session.organizationId, id, body.data.staffId);
+        return Response.json({ ok: true });
       case "cancel": {
         await cancelBooking({
           organizationId: session.organizationId,
@@ -73,4 +78,4 @@ export const PATCH = withAuth(async (session, req: Request, ctx: Params) => {
   } catch (err) {
     return bookingErrorResponse(err);
   }
-});
+}, { allowReception: true });

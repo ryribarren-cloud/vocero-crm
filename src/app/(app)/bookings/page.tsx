@@ -1,4 +1,5 @@
 import { asc } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
 import { notFound, redirect } from "next/navigation";
@@ -28,14 +29,14 @@ export default async function BookingsPage({
 }) {
   // Sin la bandera esta pantalla no existe en esta instancia.
   if (!agendaEnabled()) notFound();
-  const session = await getSessionOrNull();
+  const session = await getSessionOrNull({ allowReception: true });
   if (!session) redirect("/login");
 
   const settings = await getSettings(session.organizationId);
   const assignees = await getDb()
     .select({ id: schema.staff.id, name: schema.staff.name })
     .from(schema.staff)
-    .where(scoped(schema.staff.organizationId, session.organizationId))
+    .where(scoped(schema.staff.organizationId, session.organizationId, eq(schema.staff.takesAppointments, true)))
     .orderBy(asc(schema.staff.name));
   const params = await searchParams;
   const view = isCalendarView(params.vista) ? params.vista : null;

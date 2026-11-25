@@ -43,7 +43,7 @@ export const GET = withAuth(async (session, req: Request) => {
     range: query.range,
     truncated,
   });
-});
+}, { allowReception: true });
 
 const postSchema = z.discriminatedUnion("kind", [
   z.object({
@@ -56,6 +56,7 @@ const postSchema = z.discriminatedUnion("kind", [
   }),
   z.object({
     kind: z.literal("block"),
+    assignedStaffId: z.string().min(1).nullish(),
     startUtc: z.string().min(1),
     durationMinutes: z.number().int().min(5).max(600),
     notes: z.string().nullish(),
@@ -80,6 +81,7 @@ export const POST = withAuth(async (session, req: Request) => {
   try {
     if (body.data.kind === "block") {
       const block = await createBlock({
+        assignedStaffId: body.data.assignedStaffId,
         organizationId: session.organizationId,
         startUtc: body.data.startUtc,
         durationMinutes: body.data.durationMinutes,
@@ -105,4 +107,4 @@ export const POST = withAuth(async (session, req: Request) => {
   } catch (err) {
     return bookingErrorResponse(err);
   }
-});
+}, { allowReception: true });

@@ -91,7 +91,7 @@ export function CreateBookingDialog({
       body: JSON.stringify({
         startUtc,
         notes: notes.trim() || null,
-        ...(isSession ? { kind, contactId, assignedStaffId: assignee || null } : { kind, durationMinutes: minutes }),
+        ...(isSession ? { kind, contactId, assignedStaffId: assignee || null } : { kind, durationMinutes: minutes, assignedStaffId: assignee || null }),
       }),
     }).catch(() => null);
     setBusy(false);
@@ -114,7 +114,7 @@ export function CreateBookingDialog({
       <form
         onSubmit={submit}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-sm space-y-4 rounded-lg border bg-popover p-5 shadow-pop"
+        className="max-h-[90dvh] overflow-y-auto w-full max-w-sm space-y-4 rounded-lg border bg-popover p-5 shadow-pop"
       >
         <div>
           <h3 id="crear-reserva-titulo" className="text-[16px] font-bold">
@@ -162,7 +162,7 @@ export function CreateBookingDialog({
           </div>
         )}
 
-        {isSession && (
+        {(
           <div className="space-y-1.5">
             <Label htmlFor="cita-atiende">Atiende</Label>
             <select id="cita-atiende" value={assignee}

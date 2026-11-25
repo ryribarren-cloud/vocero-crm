@@ -27,6 +27,7 @@ export const GET = withAuth(async (session, req: Request) => {
   const settings = await getSettings(session.organizationId);
   const now = new Date();
   const slots = await computeAvailability(session.organizationId, {
+    assignedStaffId: url.searchParams.get("staffId"),
     fromISO: from && ISO_DATE.test(from) ? from : undefined,
     toISO: to && ISO_DATE.test(to) ? to : undefined,
     settings,
@@ -41,4 +42,4 @@ export const GET = withAuth(async (session, req: Request) => {
       time: timeInTz(s.startUtc, settings.timezone),
     })),
   });
-});
+}, { allowReception: true });

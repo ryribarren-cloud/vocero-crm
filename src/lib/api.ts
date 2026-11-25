@@ -15,12 +15,13 @@ export function apiError(
  * captura errores no controlados (500 sin stack) y deja pasar Response.
  */
 export function withAuth<Args extends unknown[]>(
-  handler: (session: SessionContext, ...args: Args) => Promise<Response>
+  handler: (session: SessionContext, ...args: Args) => Promise<Response>,
+  options?: { allowReception?: boolean }
 ): (...args: Args) => Promise<Response> {
   return async (...args: Args) => {
     let session: SessionContext;
     try {
-      session = await requireSession();
+      session = options ? await requireSession(options) : await requireSession();
     } catch (err) {
       if (err instanceof UnauthorizedError) {
         return apiError(401, "unauthorized", "No autenticado");

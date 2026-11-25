@@ -97,10 +97,19 @@ export const member = pgTable("member", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const staffPosition = pgTable("staff_position", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+}, (t) => [uniqueIndex("staff_position_org_name").on(t.organizationId, t.name)]);
+
 export const staff = pgTable("staff", {
   id: text("id").primaryKey(),
   organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
+  weeklyHours: jsonb("weekly_hours").$type<import("@/server/agenda/settings").WeeklyHours>(),
+  positionId: text("position_id").references(() => staffPosition.id, { onDelete: "set null" }),
+  takesAppointments: boolean("takes_appointments").notNull().default(true),
   memberId: text("member_id").unique().references(() => member.id, { onDelete: "set null" }),
 });
 
@@ -885,19 +894,6 @@ export const booking = pgTable(
   (t) => [
     index("booking_org_when_idx").on(t.organizationId, t.scheduledAt),
     index("booking_org_status_idx").on(t.organizationId, t.status),
-    /**
-     * Anti doble-booking ATÓMICO. La re-validación al confirmar deja una
-     * ventana entre leer y escribir; esto la cierra en la BASE: dos
-     * confirmaciones simultáneas del mismo instante no pueden ganar las dos, y
-     * la perdedora recibe un 23505 que el servicio traduce a `slot_taken` con
-     * alternativas frescas. Las citas de prueba quedan fuera: no consumen la
-     * agenda real.
-     */
-    uniqueIndex("booking_org_active_slot_uq")
-      .on(t.organizationId, t.scheduledAt)
-      .where(
-        sql`${t.status} in ('agendada','realizada') and ${t.isTest} = false`
-      ),
   ]
 );
 
@@ -923,6 +919,7 @@ export const offeredSlot = pgTable(
     startUtc: timestamp("start_utc").notNull(),
     /** La etiqueta EXACTA que se le mostró al cliente. */
     label: text("label").notNull(),
+    assignedStaffId: text("assigned_staff_id").references(() => staff.id),
     offeredAt: timestamp("offered_at").notNull().defaultNow(),
   },
   (t) => [index("offered_slot_conv_idx").on(t.conversationId, t.startUtc)]

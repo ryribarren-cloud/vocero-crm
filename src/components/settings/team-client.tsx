@@ -41,7 +41,7 @@ export function TeamClient() {
     void refetch();
   }, [refetch]);
 
-  async function setTakesAppointments(id: string, takesAppointments: boolean, accessRole?: "member" | "barber") {
+  async function setTakesAppointments(id: string, takesAppointments: boolean, accessRole?: "member" | "barber" | "reception") {
     setAssignmentBusy(true);
     setError(null);
     const res = await fetch("/api/settings/team", {
@@ -170,19 +170,19 @@ export function TeamClient() {
               <p className="truncate text-sm font-medium">{m.name}</p>
               <p className="text-xs text-muted-foreground">{m.email}</p>
             </div>
-            {canManage && (m.role === "member" || m.role === "barber") && (
+            {canManage && (m.role === "reception" || m.role === "member" || m.role === "barber") && (
               <select aria-label={`Acceso de ${m.name}`} value={m.role} disabled={assignmentBusy}
                 className="rounded-md border border-input bg-background px-2 py-1 text-sm"
                 onChange={(event) => {
-                  const role = event.target.value === "barber" ? "barber" : "member";
+                  const role = event.target.value === "reception" ? "reception" : event.target.value === "barber" ? "barber" : "member";
                   void setTakesAppointments(m.id, m.takesAppointments, role);
                 }}>
                 <option value="member">Miembro</option>
-                <option value="barber">Barbero</option>
+                <option value="reception">Recepción</option><option value="barber">Barbero</option>
               </select>
             )}
             <Badge variant={m.role === "owner" ? "default" : "secondary"}>
-              {m.role === "owner" ? "Propietario" : m.role === "barber" ? "Barbero" : "Miembro"}
+              {m.role === "owner" ? "Propietario" : m.role === "barber" ? "Barbero" : m.role === "reception" ? "Recepción" : "Miembro"}
             </Badge>
           </div>
         ))}

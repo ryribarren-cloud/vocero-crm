@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, eq, isNull, or, sql, inArray, lte } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
 import {
@@ -82,6 +82,7 @@ export async function computeAvailability(
     toISO?: string;
     excludeBookingId?: string;
     now?: Date;
+    assignedStaffId?: string | null;
     settings?: CalendarSettings;
   }
 ): Promise<AvailableSlot[]> {
@@ -92,7 +93,15 @@ export async function computeAvailability(
   const from = opts?.fromISO ?? todayInTz(now, tz);
   const to = opts?.toISO ?? addDaysISO(from, settings.maxDaysAhead);
 
-  const candidates = buildCandidateSlots(settings, from, to);
+  let candidates = buildCandidateSlots(settings, from, to);
+  if (opts?.assignedStaffId) {
+    const [staff] = await getDb().select().from(schema.staff).where(scoped(schema.staff.organizationId, organizationId, eq(schema.staff.id, opts.assignedStaffId), eq(schema.staff.takesAppointments, true)));
+    if (!staff) return [];
+    if (staff.weeklyHours) {
+      const own = new Set(buildCandidateSlots({ ...settings, weeklyHours: staff.weeklyHours }, from, to).map(s => s.startUtc));
+      candidates = candidates.filter(s => own.has(s.startUtc));
+    }
+  }
   if (candidates.length === 0) return [];
 
   const busy = await getBusyIntervals(organizationId, {
@@ -100,6 +109,7 @@ export async function computeAvailability(
     toUtc:
       zonedWallClockToUtc(addDaysISO(to, 1), "00:00", tz) ??
       new Date(now.getTime() + 86_400_000 * 61),
+    assignedStaffId: opts?.assignedStaffId,
     excludeBookingId: opts?.excludeBookingId,
   });
 
@@ -125,7 +135,7 @@ export async function computeAvailability(
 export async function findSlot(
   organizationId: string,
   whenISO: string,
-  opts?: { excludeBookingId?: string; now?: Date; settings?: CalendarSettings }
+  opts?: { assignedStaffId?: string | null; excludeBookingId?: string; now?: Date; settings?: CalendarSettings }
 ): Promise<AvailableSlot | null> {
   const target = Date.parse(whenISO);
   if (Number.isNaN(target)) return null;
@@ -136,6 +146,7 @@ export async function findSlot(
   const slots = await computeAvailability(organizationId, {
     fromISO: addDaysISO(dayInTz, -1),
     toISO: addDaysISO(dayInTz, 1),
+    assignedStaffId: opts?.assignedStaffId,
     excludeBookingId: opts?.excludeBookingId,
     now: opts?.now,
     settings,
@@ -145,7 +156,7 @@ export async function findSlot(
 
 async function getBusyIntervals(
   organizationId: string,
-  input: { fromUtc: Date; toUtc: Date; excludeBookingId?: string }
+  input: { assignedStaffId?: string | null; fromUtc: Date; toUtc: Date; excludeBookingId?: string }
 ): Promise<SlotUtc[]> {
   const db = getDb();
   const rows = await db
@@ -164,7 +175,8 @@ async function getBusyIntervals(
           inArray(schema.booking.status, ["agendada", "realizada"]),
           // Sandbox: una cita de prueba no consume la agenda real.
           eq(schema.booking.isTest, false),
-          gte(schema.booking.scheduledAt, input.fromUtc),
+          sql`${schema.booking.scheduledAt} + ${schema.booking.durationMinutes} * interval '1 minute' > ${input.fromUtc.toISOString()}::timestamp`,
+          input.assignedStaffId ? or(isNull(schema.booking.assignedStaffId), eq(schema.booking.assignedStaffId, input.assignedStaffId)) : undefined,
           lte(schema.booking.scheduledAt, input.toUtc)
         )
       )

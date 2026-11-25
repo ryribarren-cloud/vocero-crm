@@ -33,8 +33,10 @@ export function BookingDrawer({
   nowMs,
   onClose,
   onAct,
+  assignees,
   onRescheduled,
 }: {
+  assignees: { id: string; name: string }[];
   booking: Booking;
   timezone: string;
   today: string;
@@ -225,6 +227,7 @@ export function BookingDrawer({
 
           {rescheduling && (
             <Reschedule
+                staffId={b.assignee?.id}
               today={today}
               busy={busy}
               onCancel={() => setRescheduling(false)}
@@ -276,6 +279,7 @@ export function BookingDrawer({
                 </Button>
               </>
             )}
+            {isSession && <label>Asignar a <select value={b.assignee?.id ?? ""} disabled={busy} onChange={e => void run({ action: "assign", staffId: e.target.value })}><option value="" disabled>Elegir ficha</option>{assignees.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>}
             <Button
               size="sm"
               variant="ghost"
@@ -300,11 +304,13 @@ export function BookingDrawer({
  * nadie estuviera reprogramando.
  */
 function Reschedule({
+  staffId,
   today,
   busy,
   onCancel,
   onPick,
 }: {
+  staffId?: string;
   today: string;
   busy: boolean;
   onCancel: () => void;
@@ -319,7 +325,7 @@ function Reschedule({
     const abort = new AbortController();
     let alive = true;
     void (async () => {
-      const res = await fetch("/api/calendar/availability", { signal: abort.signal }).catch(
+      const res = await fetch("/api/calendar/availability?staffId=" + encodeURIComponent(staffId ?? ""), { signal: abort.signal }).catch(
         () => null
       );
       if (!alive) return;
@@ -335,7 +341,7 @@ function Reschedule({
       alive = false;
       abort.abort();
     };
-  }, []);
+  }, [staffId]);
 
   const days = useMemo(() => groupSlotsByDay(slots ?? []), [slots]);
   const selected = day ?? days[0]?.[0] ?? null;

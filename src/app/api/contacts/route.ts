@@ -98,7 +98,7 @@ export const GET = withAuth(async (session, req: Request) => {
       )
     );
   return Response.json({ contacts });
-});
+}, { allowReception: true });
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -175,4 +175,4 @@ export const POST = withAuth(async (session, req: Request) => {
     { contact: serializeContact(inserted[0]), lead: { id: lead.id } },
     { status: 201 }
   );
-});
+}, { allowReception: true });
