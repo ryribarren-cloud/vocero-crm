@@ -88,7 +88,7 @@ export async function createSessionBooking(input: {
   conversationId?: string | null;
   /** Camino manual del operador. */
   contactId?: string | null;
-  assignedMemberId?: string | null;
+  assignedStaffId?: string | null;
   notes?: string | null;
   /**
    * true ⇒ exige que el instante figure entre los ofrecidos a la conversación
@@ -105,13 +105,12 @@ export async function createSessionBooking(input: {
     throw new BookingError("invalid", "Instante inválido");
   }
 
-  if (input.assignedMemberId) {
-    const [assignee] = await db.select({ id: schema.member.id })
-      .from(schema.member)
-      .where(scoped(schema.member.organizationId, input.organizationId,
-        eq(schema.member.id, input.assignedMemberId), eq(schema.member.takesAppointments, true)))
+  if (input.assignedStaffId) {
+    const [assignee] = await db.select({ id: schema.staff.id })
+      .from(schema.staff)
+      .where(scoped(schema.staff.organizationId, input.organizationId, eq(schema.staff.id, input.assignedStaffId)))
       .limit(1);
-    if (!assignee) throw new BookingError("invalid", "El miembro seleccionado no atiende citas");
+    if (!assignee) throw new BookingError("invalid", "La persona seleccionada no pertenece a la plantilla");
   }
 
   // Contexto de la conversación: contacto y si es del Laboratorio.
@@ -199,7 +198,7 @@ export async function createSessionBooking(input: {
         kind: "session",
         source: input.source === "ai" ? "ai" : "manual",
         contactId,
-        assignedMemberId: input.assignedMemberId ?? null,
+        assignedStaffId: input.assignedStaffId ?? null,
         conversationId: input.conversationId ?? null,
         leadId: leadRows[0]?.id ?? null,
         scheduledAt: new Date(slot.startUtc),

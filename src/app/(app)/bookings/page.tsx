@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { asc } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
 import { notFound, redirect } from "next/navigation";
@@ -33,11 +33,10 @@ export default async function BookingsPage({
 
   const settings = await getSettings(session.organizationId);
   const assignees = await getDb()
-    .select({ id: schema.member.id, name: schema.user.name })
-    .from(schema.member)
-    .innerJoin(schema.user, eq(schema.member.userId, schema.user.id))
-    .where(scoped(schema.member.organizationId, session.organizationId, eq(schema.member.takesAppointments, true)))
-    .orderBy(asc(schema.user.name));
+    .select({ id: schema.staff.id, name: schema.staff.name })
+    .from(schema.staff)
+    .where(scoped(schema.staff.organizationId, session.organizationId))
+    .orderBy(asc(schema.staff.name));
   const params = await searchParams;
   const view = isCalendarView(params.vista) ? params.vista : null;
   const listFrom = isIsoDate(params.desde) ? params.desde : null;

@@ -91,7 +91,7 @@ export function CreateBookingDialog({
       body: JSON.stringify({
         startUtc,
         notes: notes.trim() || null,
-        ...(isSession ? { kind, contactId, assignedMemberId: assignee || null } : { kind, durationMinutes: minutes }),
+        ...(isSession ? { kind, contactId, assignedStaffId: assignee || null } : { kind, durationMinutes: minutes }),
       }),
     }).catch(() => null);
     setBusy(false);

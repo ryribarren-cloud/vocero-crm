@@ -138,7 +138,8 @@ export function settingsSections({
     { href: "/settings/templates", label: "Plantillas" },
     // 049 — lo que el equipo inserta con «/atajo» en la Bandeja.
     { href: "/settings/quick-replies", label: "Respuestas rápidas" },
-    { href: "/settings/team", label: "Equipo" },
+    { href: "/settings/team", label: "Usuarios y permisos" },
+    { href: "/settings/staff", label: "Plantilla laboral" },
   ];
   if (atribucion) negocio.push({ href: "/settings/ads", label: "Anuncios" });
 

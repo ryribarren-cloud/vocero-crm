@@ -60,15 +60,14 @@ function baseQuery() {
       booking: schema.booking,
       contactId: schema.contact.id,
       contactName: schema.contact.name,
-      assigneeName: schema.user.name,
+      assigneeName: schema.staff.name,
     })
     .from(schema.booking)
     .leftJoin(schema.contact, eq(schema.booking.contactId, schema.contact.id))
-    .leftJoin(schema.member, and(
-      eq(schema.booking.assignedMemberId, schema.member.id),
-      eq(schema.booking.organizationId, schema.member.organizationId)
-    ))
-    .leftJoin(schema.user, eq(schema.member.userId, schema.user.id));
+    .leftJoin(schema.staff, and(
+      eq(schema.booking.assignedStaffId, schema.staff.id),
+      eq(schema.booking.organizationId, schema.staff.organizationId)
+    ));
 }
 
 /** Las últimas 200 citas: el listado de siempre, para quien no pide rango. */
@@ -80,7 +79,7 @@ export async function listBookings(
   const resolved = settings ?? (await getSettings(organizationId));
   const rows = await baseQuery()
     .where(scoped(schema.booking.organizationId, organizationId, assignedMemberId
-      ? and(eq(schema.booking.kind, "session"), eq(schema.booking.assignedMemberId, assignedMemberId))
+      ? and(eq(schema.booking.kind, "session"), eq(schema.staff.memberId, assignedMemberId))
       : undefined))
     .orderBy(desc(schema.booking.scheduledAt))
     .limit(LIST_LIMIT);
@@ -143,8 +142,8 @@ function toListItem(r: Row, timezone: string): BookingListItem {
     time: parts.time,
     weekday: parts.weekday,
     contact: r.contactId ? { id: r.contactId, name: r.contactName ?? "" } : null,
-    assignee: r.booking.assignedMemberId && r.assigneeName
-      ? { id: r.booking.assignedMemberId, name: r.assigneeName } : null,
+    assignee: r.booking.assignedStaffId && r.assigneeName
+      ? { id: r.booking.assignedStaffId, name: r.assigneeName } : null,
     conversationId: r.booking.conversationId,
     connector: r.booking.connector,
     meetingLink: r.booking.meetingLink,

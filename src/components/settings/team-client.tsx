@@ -170,19 +170,12 @@ export function TeamClient() {
               <p className="truncate text-sm font-medium">{m.name}</p>
               <p className="text-xs text-muted-foreground">{m.email}</p>
             </div>
-            {canManage && (
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={m.takesAppointments} disabled={assignmentBusy}
-                  onChange={(event) => void setTakesAppointments(m.id, event.target.checked)} />
-                Atiende citas
-              </label>
-            )}
             {canManage && (m.role === "member" || m.role === "barber") && (
               <select aria-label={`Acceso de ${m.name}`} value={m.role} disabled={assignmentBusy}
                 className="rounded-md border border-input bg-background px-2 py-1 text-sm"
                 onChange={(event) => {
                   const role = event.target.value === "barber" ? "barber" : "member";
-                  void setTakesAppointments(m.id, role === "barber" || m.takesAppointments, role);
+                  void setTakesAppointments(m.id, m.takesAppointments, role);
                 }}>
                 <option value="member">Miembro</option>
                 <option value="barber">Barbero</option>

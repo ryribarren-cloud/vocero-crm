@@ -97,6 +97,13 @@ export const member = pgTable("member", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const staff = pgTable("staff", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  memberId: text("member_id").unique().references(() => member.id, { onDelete: "set null" }),
+});
+
 export const invitation = pgTable("invitation", {
   id: text("id").primaryKey(),
   organizationId: text("organization_id")
@@ -845,6 +852,7 @@ export const booking = pgTable(
       onDelete: "set null",
     }),
     leadId: text("lead_id").references(() => lead.id, { onDelete: "set null" }),
+    assignedStaffId: text("assigned_staff_id").references(() => staff.id, { onDelete: "set null" }),
     assignedMemberId: text("assigned_member_id").references(() => member.id, { onDelete: "set null" }),
     /** Instante UTC. El horario semanal es de pared; esto ya está resuelto. */
     scheduledAt: timestamp("scheduled_at").notNull(),
