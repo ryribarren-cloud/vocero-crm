@@ -10,7 +10,8 @@ export const dynamic = "force-dynamic";
  * a la Bandeja como siempre. Sin sesión, `/inbox` manda al login.
  */
 export default async function Home() {
-  const session = await getSessionOrNull();
+  const session = await getSessionOrNull({ allowBarber: true });
+  if (session?.role === "barber") redirect("/mis-citas");
   if (session && (await guideFirst(session))) redirect("/onboarding");
   redirect("/inbox");
 }

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { apiError, parseBody, withAuth } from "@/lib/api";
 import { getAuth, runInternalSignup } from "@/lib/auth";
@@ -88,6 +88,7 @@ export const POST = withAuth(async (session, req: Request) => {
 const assignmentSchema = z.object({
   id: z.string().min(1),
   takesAppointments: z.boolean(),
+  accessRole: z.enum(["member", "barber"]).optional(),
 });
 
 export const PATCH = withAuth(async (session, req: Request) => {
@@ -97,8 +98,9 @@ export const PATCH = withAuth(async (session, req: Request) => {
   const body = await parseBody(req, assignmentSchema);
   if (!body.ok) return body.response;
   const [member] = await getDb().update(schema.member)
-    .set({ takesAppointments: body.data.takesAppointments })
-    .where(scoped(schema.member.organizationId, session.organizationId, eq(schema.member.id, body.data.id)))
+    .set({ takesAppointments: body.data.takesAppointments, role: body.data.accessRole })
+    .where(scoped(schema.member.organizationId, session.organizationId, eq(schema.member.id, body.data.id),
+      body.data.accessRole ? sql`${schema.member.role} in ('member', 'barber')` : undefined))
     .returning({ id: schema.member.id });
   if (!member) return apiError(404, "not_found", "Miembro no encontrado");
   return Response.json({ ok: true });

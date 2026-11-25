@@ -15,7 +15,8 @@ import { AvisoIaBanner } from "@/components/avisos/aviso-ia";
 export default async function AppLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const session = await getSessionOrNull();
+  const session = await getSessionOrNull({ allowBarber: true });
+  if (session?.role === "barber") redirect("/mis-citas");
   if (!session) redirect("/login");
   const branding = await getBranding(session.organizationId);
   const authSession = await getAuth().api.getSession({

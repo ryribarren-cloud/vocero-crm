@@ -67,10 +67,11 @@ export async function resolveActiveOrganizationId(
 
 export async function resolveMembership(
   userId: string
-): Promise<{ organizationId: string; role: string } | null> {
+): Promise<{ id: string; organizationId: string; role: string } | null> {
   const db = getDb();
   const rows = await db
     .select({
+      id: schema.member.id,
       organizationId: schema.member.organizationId,
       role: schema.member.role,
     })

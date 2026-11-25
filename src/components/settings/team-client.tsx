@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 type Member = {
   id: string;
   role: string;
+  takesAppointments: boolean;
   name: string;
   email: string;
   createdAt: string;
@@ -19,6 +20,8 @@ type Member = {
 
 export function TeamClient() {
   const [members, setMembers] = useState<Member[]>([]);
+  const [canManage, setCanManage] = useState(false);
+  const [assignmentBusy, setAssignmentBusy] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [tempPassword, setTempPassword] = useState("");
@@ -29,13 +32,27 @@ export function TeamClient() {
   const refetch = useCallback(async () => {
     const res = await fetch("/api/settings/team").catch(() => null);
     if (!res?.ok) return;
-    const data = (await res.json()) as { members: Member[] };
+    const data = (await res.json()) as { members: Member[]; canManage: boolean };
+    setCanManage(data.canManage);
     setMembers(data.members);
   }, []);
 
   useEffect(() => {
     void refetch();
   }, [refetch]);
+
+  async function setTakesAppointments(id: string, takesAppointments: boolean, accessRole?: "member" | "barber") {
+    setAssignmentBusy(true);
+    setError(null);
+    const res = await fetch("/api/settings/team", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id, takesAppointments, accessRole }),
+    }).catch(() => null);
+    if (res?.ok) await refetch();
+    else setError("No se pudo guardar quién atiende citas");
+    setAssignmentBusy(false);
+  }
 
   function generatePassword() {
     const alphabet =
@@ -153,8 +170,26 @@ export function TeamClient() {
               <p className="truncate text-sm font-medium">{m.name}</p>
               <p className="text-xs text-muted-foreground">{m.email}</p>
             </div>
+            {canManage && (
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={m.takesAppointments} disabled={assignmentBusy}
+                  onChange={(event) => void setTakesAppointments(m.id, event.target.checked)} />
+                Atiende citas
+              </label>
+            )}
+            {canManage && (m.role === "member" || m.role === "barber") && (
+              <select aria-label={`Acceso de ${m.name}`} value={m.role} disabled={assignmentBusy}
+                className="rounded-md border border-input bg-background px-2 py-1 text-sm"
+                onChange={(event) => {
+                  const role = event.target.value === "barber" ? "barber" : "member";
+                  void setTakesAppointments(m.id, role === "barber" || m.takesAppointments, role);
+                }}>
+                <option value="member">Miembro</option>
+                <option value="barber">Barbero</option>
+              </select>
+            )}
             <Badge variant={m.role === "owner" ? "default" : "secondary"}>
-              {m.role === "owner" ? "Propietario" : "Miembro"}
+              {m.role === "owner" ? "Propietario" : m.role === "barber" ? "Barbero" : "Miembro"}
             </Badge>
           </div>
         ))}

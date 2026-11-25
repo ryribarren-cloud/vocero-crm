@@ -74,11 +74,14 @@ function baseQuery() {
 /** Las últimas 200 citas: el listado de siempre, para quien no pide rango. */
 export async function listBookings(
   organizationId: string,
-  settings?: CalendarSettings
+  settings?: CalendarSettings,
+  assignedMemberId?: string
 ): Promise<BookingListItem[]> {
   const resolved = settings ?? (await getSettings(organizationId));
   const rows = await baseQuery()
-    .where(scoped(schema.booking.organizationId, organizationId))
+    .where(scoped(schema.booking.organizationId, organizationId, assignedMemberId
+      ? and(eq(schema.booking.kind, "session"), eq(schema.booking.assignedMemberId, assignedMemberId))
+      : undefined))
     .orderBy(desc(schema.booking.scheduledAt))
     .limit(LIST_LIMIT);
   return rows.map((r) => toListItem(r, resolved.timezone));

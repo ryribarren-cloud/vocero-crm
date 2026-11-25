@@ -4,6 +4,7 @@ import { resolveMembership } from "@/server/auth/on-signup";
 
 export type SessionContext = {
   userId: string;
+  memberId: string;
   organizationId: string;
   role: string;
 };
@@ -19,7 +20,7 @@ export class UnauthorizedError extends Error {
  * Sesión + organización activa para route handlers y server components.
  * Lanza UnauthorizedError si no hay sesión u organización.
  */
-export async function requireSession(): Promise<SessionContext> {
+export async function requireSession({ allowBarber = false } = {}): Promise<SessionContext> {
   const auth = getAuth();
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) throw new UnauthorizedError();
@@ -29,7 +30,11 @@ export async function requireSession(): Promise<SessionContext> {
   if (!membership) {
     throw new UnauthorizedError("Sesión sin organización activa");
   }
+  if (membership.role === "barber" && !allowBarber) {
+    throw new UnauthorizedError("La cuenta de barbero solo puede abrir Mis citas");
+  }
   return {
+    memberId: membership.id,
     userId: session.user.id,
     organizationId: membership.organizationId,
     role: membership.role,
@@ -37,9 +42,9 @@ export async function requireSession(): Promise<SessionContext> {
 }
 
 /** Igual que requireSession pero devuelve null en vez de lanzar. */
-export async function getSessionOrNull(): Promise<SessionContext | null> {
+export async function getSessionOrNull(options?: { allowBarber?: boolean }): Promise<SessionContext | null> {
   try {
-    return await requireSession();
+    return await requireSession(options);
   } catch {
     return null;
   }
